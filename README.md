@@ -8,3 +8,9 @@ https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-binary-ins
 ****
 ## example1.cpp
 记录整个程序调用的ntdll里的api
+
+## example2.cpp
+记录模块加载情况
+
+## example3.cpp
+hook指定api 类似于微软的detours库
