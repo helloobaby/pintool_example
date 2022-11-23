@@ -9,9 +9,6 @@ using std::cerr;
 using std::endl;
 using std::string;
 
-//std::ofstream kTraceFile;
-
-// 
 typedef struct _UNICODE_STRING {
     unsigned short Length;
     unsigned short MaximumLength;
@@ -28,7 +25,8 @@ typedef struct _OBJECT_ATTRIBUTES {
 } OBJECT_ATTRIBUTES;
 typedef OBJECT_ATTRIBUTES *POBJECT_ATTRIBUTES;
 
-typedef int32_t (*ProtoType)(void* FileHandle, uint32_t DesiredAccess,
+// 这个调用约定要注意(PROTO_Allocate有一个参数也是关于调用约定的)
+typedef int32_t (__stdcall* ProtoType)(void* FileHandle, uint32_t DesiredAccess,
                              POBJECT_ATTRIBUTES ObjectAttributes,
                              void* IoStatusBlock, void* AllocationSize,
                              uint32_t FileAttributes, uint32_t ShareAccess,
@@ -38,34 +36,20 @@ typedef int32_t (*ProtoType)(void* FileHandle, uint32_t DesiredAccess,
 char* wctoc(unsigned short* str) {
   char* t = (char*)malloc(256);
   size_t s = wcstombs(t,(const wchar_t*)str, 256);
-  //cerr << s << endl;
   return t;
 }
 
-int32_t NtCreateFileDetour(
-    ProtoType OriPtr,
-    void* FileHandle,
-    uint32_t        DesiredAccess,
-    POBJECT_ATTRIBUTES ObjectAttributes,
-    void* IoStatusBlock,
-    void* AllocationSize,
-
-
-    uint32_t              FileAttributes,
-    uint32_t              ShareAccess,
-    uint32_t              CreateDisposition,
-    uint32_t              CreateOptions,
-    void* EaBuffer,
-    uint32_t              EaLength) {
-    
-  //cerr << "NtCreateFileDetour" << endl;
-  //cerr << (int*)ObjectAttributes << endl;
-  //cerr << (int)IoStatusBlock << endl;
-  //cerr << ObjectAttributes->Length << endl;
-  //cerr << ObjectAttributes->ObjectName->MaximumLength << endl;
-  //cerr << OriPtr << endl;
-
+int32_t NtCreateFileDetour(ProtoType OriPtr, void* FileHandle,
+                           uint32_t DesiredAccess,
+                           POBJECT_ATTRIBUTES ObjectAttributes,
+                           void* IoStatusBlock, void* AllocationSize,
+                           uint32_t FileAttributes, uint32_t ShareAccess,
+                           uint32_t CreateDisposition, uint32_t CreateOptions,
+                           void* EaBuffer, uint32_t EaLength) {
+  cerr << FileHandle << endl;
+  cerr << DesiredAccess << endl;
   cerr << wctoc(ObjectAttributes->ObjectName->Buffer) << endl;
+
   return OriPtr(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock,
                 AllocationSize, FileAttributes, ShareAccess, CreateDisposition,
                 CreateOptions, EaBuffer, EaLength);
@@ -83,7 +67,7 @@ VOID ImageLoad(IMG img, VOID* v) {
            << " " << std::hex << RTN_Address(rtn) << " ..." << endl;
 
       PROTO ProtoAlloc = PROTO_Allocate(
-          PIN_PARG(int32_t), CALLINGSTD_DEFAULT, "NtCreateFileDetour",
+          PIN_PARG(int32_t), CALLINGSTD_STDCALL, "NtCreateFile",
           PIN_PARG(void*), PIN_PARG(uint32_t), PIN_PARG(void*), PIN_PARG(void*),
           PIN_PARG(void*), PIN_PARG(uint32_t), PIN_PARG(uint32_t),
           PIN_PARG(uint32_t), PIN_PARG(uint32_t), PIN_PARG(void*),
