@@ -1,7 +1,3 @@
-/* ===================================================================== */
-/* Imported Headers														 */
-/* ===================================================================== */
-
 //#include "Zydis.h"
 #include "pin.H"
 
@@ -17,7 +13,9 @@
 #include <hash_set>
 
 std::ofstream TraceFile;
-
+std::hash_set<std::string> kCallChain;
+PIN_LOCK kHashSetLock;
+PIN_LOCK kFileLock;
 
 struct Module {
   std::string name_;
@@ -58,7 +56,9 @@ VOID Image(IMG img, VOID *v) {
 /* ===================================================================== */
 
 VOID Fini(INT32 code, VOID *v) {
-  TraceFile << "Process exit code " << std::hex << code << std::endl;
+  PIN_GetLock(&kFileLock,PIN_GetTid());
+  for (auto& call : kCallChain) TraceFile << call << std::endl;
+  PIN_ReleaseLock(&kFileLock);
 
   TraceFile.close();
 }
@@ -83,8 +83,10 @@ VOID PrintInsAddress(VOID *ip) {
   };
 
   if (!NtdllModule) {
+    PIN_GetLock(&kFileLock, PIN_GetTid());
     TraceFile << "can find ntdll.dll ..." << std::endl;
     TraceFile.close();
+    PIN_ReleaseLock(&kFileLock);
     exit(0);
   }
 
@@ -93,18 +95,13 @@ VOID PrintInsAddress(VOID *ip) {
       addr > kModuleInfo[NtdllModuleIndex].start_) {
     auto it = kSymbolInfo[NtdllModuleIndex].find(addr);
     if (it != kSymbolInfo[NtdllModuleIndex].end()) {
-      TraceFile << it->second << std::endl; // 将调用API存储在文件中
+      PIN_GetLock(&kHashSetLock, PIN_GetTid());
+      kCallChain.insert(it->second);
+      PIN_ReleaseLock(&kHashSetLock);
     }
   }
 }
 VOID Instruction(INS ins, VOID *v) {
-  static bool PrintModule = false;
-  if (!PrintModule) {
-    for (auto m : kModuleInfo) {
-      TraceFile << m.name_ << std::endl;
-    }
-    PrintModule = true;
-  }
 
   // https://people.cs.vt.edu/~gback/cs6304.spring07/pin2/Doc/Pin/html/group__INS__INST__API.html#g74a956a0acde197043d04f4adcde4626
   INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)PrintInsAddress, IARG_INST_PTR,
@@ -136,6 +133,8 @@ int main(int argc, char *argv[]) {
   }
   TraceFile << "-- init pin done" << std::endl;
 
+  PIN_InitLock(&kFileLock);
+  PIN_InitLock(&kHashSetLock);
   // Register Image to be called to instrument functions.
   IMG_AddInstrumentFunction(Image, 0);
   PIN_AddFiniFunction(Fini, 0);
@@ -152,11 +151,5 @@ int main(int argc, char *argv[]) {
   // Never returns
   // pin会利用CreateProcess启动那个进程,等那个进程结束之后就会返回
   PIN_StartProgram();
-
-  TraceFile.close();
   return 0;
 }
-
-/* ===================================================================== */
-/* eof 																     */
-/* ===================================================================== */
