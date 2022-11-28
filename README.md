@@ -14,3 +14,6 @@ https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-binary-ins
 
 ## example3.cpp
 hook NtCreateFile
+
+## example4.cpp
+pintool中使用windows的windows.h
